@@ -1044,8 +1044,8 @@
             for (let feed of feeds) {
                 try {
                     const encodedUrl = encodeURIComponent(feed.url);
-                    const apiUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodedUrl}&limit=${newsLimit}`;
-                    console.log(`📡 API 호출: ${apiUrl}`);
+                    const apiUrl = `https://api.allorigins.win/get?url=${encodedUrl}`;
+                    console.log(`📡 API 호출: ${feed.url}`);
                     
                     const response = await fetch(apiUrl);
                     
@@ -1055,22 +1055,32 @@
 
                     const data = await response.json();
                     
-                    console.log(`✅ ${feed.url.substring(0, 30)}: API가 ${data.items?.length || 0}개 아이템 반환`);
+                    // XML 파싱
+                    const parser = new DOMParser();
+                    const xmlDoc = parser.parseFromString(data.contents, "text/xml");
+                    const items = xmlDoc.querySelectorAll('item');
                     
-                    if (data.items && data.items.length > 0) {
-                        const feedTitle = data.feed?.title || feed.url.substring(0, 30);
+                    console.log(`✅ ${feed.url.substring(0, 30)}: 총 ${items.length}개 아이템 발견`);
+                    
+                    if (items.length > 0) {
+                        // 피드 제목 추출
+                        const channelTitle = xmlDoc.querySelector('channel > title')?.textContent || feed.url.substring(0, 30);
                         
-                        // limit개까지만 가져오기 (API 응답이 부족할 수 있으므로)
-                        const itemsToProcess = data.items.slice(0, newsLimit);
+                        // limit개까지만 처리
+                        const itemsToProcess = Math.min(newsLimit, items.length);
+                        console.log(`   처리할 아이템: ${itemsToProcess}개 수집`);
                         
-                        console.log(`   처리할 아이템: ${itemsToProcess.length}개 수집`);
-                        
-                        itemsToProcess.forEach((item) => {
+                        for (let i = 0; i < itemsToProcess; i++) {
+                            const item = items[i];
+                            const title = item.querySelector('title')?.textContent || '';
+                            const link = item.querySelector('link')?.textContent || '#';
+                            const description = item.querySelector('description')?.textContent || '';
+                            const pubDate = item.querySelector('pubDate')?.textContent || '';
+                            
                             let dateStr = '';
-                            if (item.pubDate || item.published) {
+                            if (pubDate) {
                                 try {
-                                    const date = new Date(item.pubDate || item.published);
-                                    // 날짜와 시간을 함께 표시 (HH:MM 24시간 형식)
+                                    const date = new Date(pubDate);
                                     const year = date.getFullYear();
                                     const month = String(date.getMonth() + 1).padStart(2, '0');
                                     const day = String(date.getDate()).padStart(2, '0');
@@ -1078,18 +1088,18 @@
                                     const minutes = String(date.getMinutes()).padStart(2, '0');
                                     dateStr = `${year}-${month}-${day} ${hours}:${minutes}`;
                                 } catch (e) {
-                                    dateStr = (item.pubDate || item.published).substring(0, 16);
+                                    dateStr = pubDate.substring(0, 16);
                                 }
                             }
                             
                             allNews.push({
-                                feedTitle: feedTitle,
-                                title: item.title || '',
-                                content: item.content || item.description || '',
-                                link: item.link || '#',
+                                feedTitle: channelTitle,
+                                title: title,
+                                content: description,
+                                link: link,
                                 date: dateStr
                             });
-                        });
+                        }
                     }
                 } catch (error) {
                     console.error('❌ RSS 로드 오류:', error);
