@@ -1028,7 +1028,7 @@
         async function loadNews() {
             const newsList = document.getElementById('news-list');
             let feeds = JSON.parse(localStorage.getItem('rss-feeds')) || [];
-            const newsLimit = localStorage.getItem('news-limit') || '30';
+            const newsLimit = parseInt(localStorage.getItem('news-limit') || '30');
             
             if (feeds.length === 0) {
                 newsList.innerHTML = '<div class="empty-message">RSS 피드를 추가해주세요</div>';
@@ -1053,25 +1053,33 @@
                     if (data.items && data.items.length > 0) {
                         const feedTitle = data.feed?.title || feed.url.substring(0, 30);
                         
-                        data.items.forEach((item, index) => {
-                            if (index < parseInt(newsLimit)) {
-                                let dateStr = '';
-                                if (item.pubDate || item.published) {
-                                    try {
-                                        dateStr = new Date(item.pubDate || item.published).toLocaleDateString('ko-KR');
-                                    } catch (e) {
-                                        dateStr = (item.pubDate || item.published).substring(0, 10);
-                                    }
+                        // limit개까지만 가져오기 (API 응답이 부족할 수 있으므로)
+                        const itemsToProcess = data.items.slice(0, newsLimit);
+                        
+                        itemsToProcess.forEach((item) => {
+                            let dateStr = '';
+                            if (item.pubDate || item.published) {
+                                try {
+                                    const date = new Date(item.pubDate || item.published);
+                                    // 날짜와 시간을 함께 표시 (HH:MM 24시간 형식)
+                                    const year = date.getFullYear();
+                                    const month = String(date.getMonth() + 1).padStart(2, '0');
+                                    const day = String(date.getDate()).padStart(2, '0');
+                                    const hours = String(date.getHours()).padStart(2, '0');
+                                    const minutes = String(date.getMinutes()).padStart(2, '0');
+                                    dateStr = `${year}-${month}-${day} ${hours}:${minutes}`;
+                                } catch (e) {
+                                    dateStr = (item.pubDate || item.published).substring(0, 16);
                                 }
-                                
-                                allNews.push({
-                                    feedTitle: feedTitle,
-                                    title: item.title || '',
-                                    content: item.content || item.description || '',
-                                    link: item.link || '#',
-                                    date: dateStr
-                                });
                             }
+                            
+                            allNews.push({
+                                feedTitle: feedTitle,
+                                title: item.title || '',
+                                content: item.content || item.description || '',
+                                link: item.link || '#',
+                                date: dateStr
+                            });
                         });
                     }
                 } catch (error) {
@@ -1100,8 +1108,8 @@
                         <thead>
                             <tr>
                                 <th style="width: 12%;">📰 출처</th>
-                                <th style="width: 60%;">📃 뉴스</th>
-                                <th style="width: 15%;">📅 날짜</th>
+                                <th style="width: 55%;">📃 뉴스</th>
+                                <th style="width: 20%;">📅 날짜/시간</th>
                                 <th style="width: 13%;">🔗 링크</th>
                             </tr>
                         </thead>
