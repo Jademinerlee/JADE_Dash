@@ -617,38 +617,41 @@
                 <!-- 뉴스 개수 설정 -->
                 <div class="filter-settings">
                     <strong style="font-size: 13px;">📊 한 번에 불러올 뉴스 개수:</strong>
+                    <p style="font-size: 12px; color: #ff6b6b; margin: 10px 0; padding: 8px; background: #ffe0e0; border-radius: 6px; border-left: 3px solid #ff6b6b;">
+                        ⚠️ 주의: RSS API의 한계로 인해 <strong>최대 10개씩만</strong> 불러와집니다. 아래 설정은 향후 개선을 위한 옵션입니다.
+                    </p>
                     <div class="filter-mode">
                         <label>
                             <input type="radio" name="news-limit" value="10" onchange="changeNewsLimit('10')">
-                            10개 (빠름 ⚡⚡⚡, 일부만)
+                            10개 (기본값, 실제로 10개만 불러옴)
                         </label>
                     </div>
                     <div class="filter-mode">
                         <label>
                             <input type="radio" name="news-limit" value="20" onchange="changeNewsLimit('20')">
-                            20개 (빠름 ⚡⚡, 모바일 추천)
+                            20개 (실제로는 10개만 불러옴)
                         </label>
                     </div>
                     <div class="filter-mode">
                         <label>
                             <input type="radio" name="news-limit" value="30" onchange="changeNewsLimit('30')" checked>
-                            30개 (균형잡힘 ⚡, 기본값)
+                            30개 (실제로는 10개만 불러옴)
                         </label>
                     </div>
                     <div class="filter-mode">
                         <label>
                             <input type="radio" name="news-limit" value="50" onchange="changeNewsLimit('50')">
-                            50개 (느림 🐢, 완벽한 필터링)
+                            50개 (실제로는 10개만 불러옴)
                         </label>
                     </div>
                     <div class="filter-mode">
                         <label>
                             <input type="radio" name="news-limit" value="100" onchange="changeNewsLimit('100')">
-                            100개 (매우 느림 🐌, 전체 검색)
+                            100개 (실제로는 10개만 불러옴)
                         </label>
                     </div>
                     <div class="filter-count" id="limit-info" style="margin-top: 10px; color: #667eea;">
-                        현재 설정: 30개 뉴스
+                        현재 설정: 30개 (실제: 10개)
                     </div>
                 </div>
 
@@ -872,7 +875,7 @@
         function changeNewsLimit(limit) {
             localStorage.setItem('news-limit', limit);
             const limitInfo = document.getElementById('limit-info');
-            limitInfo.textContent = `현재 설정: ${limit}개 뉴스`;
+            limitInfo.textContent = `현재 설정: ${limit}개 (실제: 10개)`;
             loadNews();
         }
 
@@ -881,7 +884,7 @@
             const limit = localStorage.getItem('news-limit') || '30';
             document.querySelector(`input[value="${limit}"]`).checked = true;
             const limitInfo = document.getElementById('limit-info');
-            limitInfo.textContent = `현재 설정: ${limit}개 뉴스`;
+            limitInfo.textContent = `현재 설정: ${limit}개 (실제: 10개)`;
         }
         function toggleFilter() {
             const isActive = localStorage.getItem('filter-active') === 'true';
@@ -1030,7 +1033,8 @@
             let feeds = JSON.parse(localStorage.getItem('rss-feeds')) || [];
             const newsLimit = parseInt(localStorage.getItem('news-limit') || '30');
             
-            console.log(`=== 뉴스 로드 시작 (limit: ${newsLimit}개) ===`);
+            console.log(`=== 뉴스 로드 시작 (설정 limit: ${newsLimit}개) ===`);
+            console.log(`⚠️ 참고: RSS API 한계로 인해 최대 10개씩만 불러와집니다`);
             
             if (feeds.length === 0) {
                 newsList.innerHTML = '<div class="empty-message">RSS 피드를 추가해주세요</div>';
@@ -1044,7 +1048,8 @@
             for (let feed of feeds) {
                 try {
                     const encodedUrl = encodeURIComponent(feed.url);
-                    const apiUrl = `https://api.allorigins.win/get?url=${encodedUrl}`;
+                    // rss2json은 실제로 최대 10개만 반환
+                    const apiUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodedUrl}&limit=10`;
                     console.log(`📡 API 호출: ${feed.url}`);
                     
                     const response = await fetch(apiUrl);
@@ -1055,32 +1060,16 @@
 
                     const data = await response.json();
                     
-                    // XML 파싱
-                    const parser = new DOMParser();
-                    const xmlDoc = parser.parseFromString(data.contents, "text/xml");
-                    const items = xmlDoc.querySelectorAll('item');
-                    
-                    console.log(`✅ ${feed.url.substring(0, 30)}: 총 ${items.length}개 아이템 발견`);
-                    
-                    if (items.length > 0) {
-                        // 피드 제목 추출
-                        const channelTitle = xmlDoc.querySelector('channel > title')?.textContent || feed.url.substring(0, 30);
+                    if (data.items && data.items.length > 0) {
+                        const feedTitle = data.feed?.title || feed.url.substring(0, 30);
                         
-                        // limit개까지만 처리
-                        const itemsToProcess = Math.min(newsLimit, items.length);
-                        console.log(`   처리할 아이템: ${itemsToProcess}개 수집`);
+                        console.log(`✅ ${feed.url.substring(0, 30)}: ${data.items.length}개 뉴스 수집`);
                         
-                        for (let i = 0; i < itemsToProcess; i++) {
-                            const item = items[i];
-                            const title = item.querySelector('title')?.textContent || '';
-                            const link = item.querySelector('link')?.textContent || '#';
-                            const description = item.querySelector('description')?.textContent || '';
-                            const pubDate = item.querySelector('pubDate')?.textContent || '';
-                            
+                        data.items.forEach((item) => {
                             let dateStr = '';
-                            if (pubDate) {
+                            if (item.pubDate || item.published) {
                                 try {
-                                    const date = new Date(pubDate);
+                                    const date = new Date(item.pubDate || item.published);
                                     const year = date.getFullYear();
                                     const month = String(date.getMonth() + 1).padStart(2, '0');
                                     const day = String(date.getDate()).padStart(2, '0');
@@ -1088,18 +1077,18 @@
                                     const minutes = String(date.getMinutes()).padStart(2, '0');
                                     dateStr = `${year}-${month}-${day} ${hours}:${minutes}`;
                                 } catch (e) {
-                                    dateStr = pubDate.substring(0, 16);
+                                    dateStr = (item.pubDate || item.published).substring(0, 16);
                                 }
                             }
                             
                             allNews.push({
-                                feedTitle: channelTitle,
-                                title: title,
-                                content: description,
-                                link: link,
+                                feedTitle: feedTitle,
+                                title: item.title || '',
+                                content: item.content || item.description || '',
+                                link: item.link || '#',
                                 date: dateStr
                             });
-                        }
+                        });
                     }
                 } catch (error) {
                     console.error('❌ RSS 로드 오류:', error);
